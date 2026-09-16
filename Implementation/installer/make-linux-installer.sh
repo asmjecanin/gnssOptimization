@@ -41,7 +41,7 @@ sudo apt-get update -qq
 sudo apt-get install -y build-essential cmake git libgtk-4-dev libadwaita-1-dev patchelf
 
 say "Building Release"
-cmake -S "$PROJECT" -B "$PROJECT/build" -DCMAKE_BUILD_TYPE=Release
+cmake -S "$PROJECT/Implementation" -B "$PROJECT/build" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$PROJECT/build" -j"$(nproc)"
 
 BIN="$RAMDISK/Out/$SOLUTION/Release/$APP"

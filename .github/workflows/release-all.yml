@@ -69,7 +69,7 @@ jobs:
           set HOME=%USERPROFILE%
           if not exist %USERPROFILE%\natID.RAMDisk mkdir %USERPROFILE%\natID.RAMDisk
           if not exist R:\ subst R: %USERPROFILE%\natID.RAMDisk
-          cmake -S . -B %USERPROFILE%\natID.RAMDisk\build
+          cmake -S Implementation -B %USERPROFILE%\natID.RAMDisk\build
           cmake --build %USERPROFILE%\natID.RAMDisk\build --config Release
           dir R:\Out\%SOLUTION%\Release
 
@@ -127,7 +127,7 @@ jobs:
 
       - name: Build (Release)
         run: |
-          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S Implementation -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
           cmake --build $HOME/natID.RAMDisk/build -j
           find $HOME/natID.RAMDisk/Out -maxdepth 4 -name "$APP_NAME*" -print
 
@@ -179,7 +179,7 @@ jobs:
 
       - name: Build (Release)
         run: |
-          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S Implementation -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
           cmake --build $HOME/natID.RAMDisk/build -j
 
       - name: Collect installer
@@ -236,7 +236,7 @@ jobs:
 
       - name: Build (Release)
         run: |
-          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S Implementation -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
           cmake --build $HOME/natID.RAMDisk/build -j$(nproc)
           test -x $HOME/natID.RAMDisk/Out/$SOLUTION/Release/$APP_NAME
 
