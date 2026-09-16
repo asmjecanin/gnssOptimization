@@ -2,18 +2,23 @@
 <!--
 	SetupCollector config for gnssOptimization (GNSS Positioning).
 
-	dev= is relative to $HOME - "GNSSOptimization" means $HOME/GNSSOptimization.
+	dev= is relative to $HOME - "GNSSOptimization/Implementation" means
+	$HOME/GNSSOptimization/Implementation, i.e. the folder that actually
+	contains res/. SetupCollector reads res/DevRes.xml from this exact
+	folder and pulls in everything DevRes.xml references, so dev= MUST
+	point at the folder that directly contains res/, not the repo root.
 	This does NOT have to match wherever you develop locally in Visual Studio -
-	it's only the path the collector (and CI) use internally. CI creates this
-	as a symlink to the checked-out repo automatically; for a local Linux/macOS
-	build, clone or symlink the repo to that exact path first.
+	it's only the path the collector (and CI) use internally. CI creates the
+	repo-root symlink automatically; for a local Linux/macOS build, clone or
+	symlink the repo to $HOME/GNSSOptimization first (Implementation/ is a
+	real subfolder inside it, so no extra symlink is needed for that part).
 
 	out= is "gnssOptimization" - must match executableName exactly (case
 	included) or dpkg-deb fails on Linux with "failed to open package info file".
 -->
 <SetupCollector xmlns:win="windows" xmlns:mac="macOS" xmlns:lin="linux" executableName="gnssOptimization">
 
-	<Folders dev="~GNSSOptimization"
+	<Folders dev="~GNSSOptimization/Implementation"
 			 executable="$RAMDisk/Out/GNSSOptimization/Release"
 			 out="$RAMDisk/Setup/gnssOptimization"/>
 
