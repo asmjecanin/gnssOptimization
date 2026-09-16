@@ -28,7 +28,7 @@ env:
   SOLUTION: GNSSOptimization           # SOLUTION_NAME from CMakeLists.txt
   PROJECT_REL: GNSSOptimization        # path under $HOME - must match installer/gnssOptimization.xml's dev=
   CONFIG_DIR: installer                # folder in this repo holding gnssOptimization.xml
-  SDK_TAG: 4.2.1       
+  SDK_TAG: v4.2.1       
   SDK_DATE: 20260710      
 
 jobs:
