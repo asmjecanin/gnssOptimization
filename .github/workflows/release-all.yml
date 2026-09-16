@@ -80,7 +80,7 @@ jobs:
           $env:HOME = $env:USERPROFILE
           Copy-Item "$env:USERPROFILE\natID.SDK\DevEnv\SetupCollectors" "$env:USERPROFILE\Setups" -Recurse -Force
           Copy-Item "$env:CONFIG_DIR/$env:APP_NAME.xml" "$env:USERPROFILE\Setups\"
-	  Copy-Item "$env:RES_DIR/DevRes.xml" "$env:USERPROFILE\Setups\"
+          Copy-Item "$env:RES_DIR/DevRes.xml" "$env:USERPROFILE\Setups\"
           if (Test-Path "$env:CONFIG_DIR/GTK4.xml") {
             Copy-Item "$env:CONFIG_DIR/GTK4.xml" "$env:USERPROFILE\natID.SDK\DevEnv\SetupCollectors\Packages\GTK4.xml" -Force
             Copy-Item "$env:CONFIG_DIR/GTK4.xml" "$env:USERPROFILE\Setups\Packages\GTK4.xml" -Force
@@ -138,7 +138,7 @@ jobs:
           sudo ln -s $HOME/natID.RAMDisk /Volumes/RAMDisk
           cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
           cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
-	  cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
+          cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
           chmod +x $HOME/natID.Utils/macOS/arm64/SetupCollector
           $HOME/natID.Utils/macOS/arm64/SetupCollector $HOME/Setups/$APP_NAME.xml
           find $HOME/natID.RAMDisk/Setup -maxdepth 4
@@ -190,7 +190,7 @@ jobs:
           sudo ln -s $HOME/natID.RAMDisk /Volumes/RAMDisk
           cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
           cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
-	  cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
+          cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
           chmod +x $HOME/natID.Utils/macOS/x64/SetupCollector
           $HOME/natID.Utils/macOS/x64/SetupCollector $HOME/Setups/$APP_NAME.xml
           find $HOME/natID.RAMDisk/Setup -maxdepth 4
@@ -250,7 +250,7 @@ jobs:
           sudo ln -s $HOME/natID.RAMDisk /media/RAMDisk
           cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
           cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
-	  cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
+          cp "$GITHUB_WORKSPACE/$RES_DIR/DevRes.xml" $HOME/Setups/
           chmod +x $HOME/natID.Utils/linux/SetupCollector
           $HOME/natID.Utils/linux/SetupCollector $HOME/Setups/$APP_NAME.xml
           find $HOME/natID.RAMDisk/Setup -maxdepth 4
