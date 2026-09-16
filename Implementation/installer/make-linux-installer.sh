@@ -17,7 +17,7 @@ set -euo pipefail
 APP="gnssOptimization"                        # GUI target name (GNSS_APP_NAME)
 SOLUTION="GNSSOptimization"                   # SOLUTION_NAME from CMakeLists.txt
 PROJECT_REL="GNSSOptimization"                # relative to $HOME - must match installer/gnssOptimization.xml's dev=
-CONFIG="$HOME/$PROJECT_REL/installer/$APP.xml"
+CONFIG="$HOME/$PROJECT_REL/Implementation/installer/$APP.xml"
 SDK="$HOME/natID.SDK"
 UTILS="$HOME/natID.Utils"
 RAMDISK="$HOME/natID.RAMDisk"

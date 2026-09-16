@@ -27,7 +27,7 @@ env:
   APP_NAME: gnssOptimization          # GUI target name (GNSS_APP_NAME in gnssOptimization.cmake)
   SOLUTION: GNSSOptimization           # SOLUTION_NAME from CMakeLists.txt
   PROJECT_REL: GNSSOptimization        # path under $HOME - must match installer/gnssOptimization.xml's dev=
-  CONFIG_DIR: installer                # folder in this repo holding gnssOptimization.xml
+  CONFIG_DIR: Implementation/installer                # folder in this repo holding gnssOptimization.xml
   SDK_TAG: v4.2.1       
   SDK_DATE: 20260710      
 
