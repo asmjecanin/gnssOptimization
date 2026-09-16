@@ -55,6 +55,7 @@ say "Preparing ~/Setups (never edit inside the SDK itself)"
 rm -rf "$HOME/Setups"
 cp -r "$SDK/DevEnv/SetupCollectors" "$HOME/Setups"
 cp "$CONFIG" "$HOME/Setups/"
+cp "$PROJECT/Implementation/res/DevRes.xml" "$HOME/Setups/"
 
 # The SDK maps $RAMDisk to /media/RAMDisk on Linux. Bridge it with a symlink
 # instead of editing EnvVariables.xml, so this survives an SDK update.
