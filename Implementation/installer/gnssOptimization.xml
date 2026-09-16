@@ -46,5 +46,5 @@
 			win:useMakeCabinet="true"
 			win:minBuildNumber="17763"
 			lin:depends="$DepGTKv4"
-			lin:icon="$HOME/GNSSOptimization/res/appIcon/gnssOptimization"/>
+			lin:icon="$HOME/GNSSOptimization/Implementation/res/appIcon/gnssOptimization"/>
 </SetupCollector>
