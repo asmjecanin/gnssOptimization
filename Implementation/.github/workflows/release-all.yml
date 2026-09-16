@@ -1,0 +1,313 @@
+name: Build All Installers
+
+# Builds Windows, macOS (arm64 + Intel) and Linux installers for GNSS
+# Positioning, and publishes them as a GitHub Release on a version tag.
+#
+# Run it from the Actions tab, or push a tag to build AND publish:
+#   git tag v1.0.0 && git push origin v1.0.0
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish to GitHub Releases (yes/no)"
+        required: false
+        default: "no"
+      release_tag:
+        description: "Tag name for the Release (required if publishing, e.g. v1.0.0)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: gnssOptimization          # GUI target name (GNSS_APP_NAME in gnssOptimization.cmake)
+  SOLUTION: GNSSOptimization           # SOLUTION_NAME from CMakeLists.txt
+  PROJECT_REL: GNSSOptimization        # path under $HOME - must match installer/gnssOptimization.xml's dev=
+  CONFIG_DIR: installer                # folder in this repo holding gnssOptimization.xml
+  SDK_TAG: 4.2.1       
+  SDK_DATE: 20260710      
+
+jobs:
+# ---------------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install natID SDK
+        shell: cmd
+        run: |
+          git clone --depth 1 https://github.com/idzafic/natID.git %USERPROFILE%\natID
+          mklink /J %USERPROFILE%\natID.SDK %USERPROFILE%\natID\natID.SDK
+          mklink /J %USERPROFILE%\natID.Utils %USERPROFILE%\natID\natID.Utils
+          curl -L -o %TEMP%\sdk-bin.7z https://github.com/idzafic/natID/releases/download/%SDK_TAG%/bin_win_x64_%SDK_DATE%.7z
+          tar -xf %TEMP%\sdk-bin.7z -C %USERPROFILE%\natID.SDK\bin 2>nul || echo "will try 7z"
+
+      - name: Extract SDK libs (7-Zip fallback)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:USERPROFILE\natID.SDK\bin\mainUtils.dll")) {
+            choco install 7zip -y --no-progress
+            & "C:\Program Files\7-Zip\7z.exe" x -y -o"$env:USERPROFILE\natID.SDK\bin" "$env:TEMP\sdk-bin.7z"
+          }
+          Get-ChildItem "$env:USERPROFILE\natID.SDK\bin" -Filter *.dll | Select-Object -First 5 Name
+
+      - name: Place project where the collector config expects it
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:USERPROFILE $env:PROJECT_REL
+          New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+          cmd /c "mklink /J `"$target`" `"$env:GITHUB_WORKSPACE`""
+
+      - name: Build (Release)
+        shell: cmd
+        run: |
+          set HOME=%USERPROFILE%
+          if not exist %USERPROFILE%\natID.RAMDisk mkdir %USERPROFILE%\natID.RAMDisk
+          if not exist R:\ subst R: %USERPROFILE%\natID.RAMDisk
+          cmake -S . -B %USERPROFILE%\natID.RAMDisk\build
+          cmake --build %USERPROFILE%\natID.RAMDisk\build --config Release
+          dir R:\Out\%SOLUTION%\Release
+
+      - name: Collect installer
+        shell: pwsh
+        run: |
+          $env:HOME = $env:USERPROFILE
+          Copy-Item "$env:USERPROFILE\natID.SDK\DevEnv\SetupCollectors" "$env:USERPROFILE\Setups" -Recurse -Force
+          Copy-Item "$env:CONFIG_DIR/$env:APP_NAME.xml" "$env:USERPROFILE\Setups\"
+          if (Test-Path "$env:CONFIG_DIR/GTK4.xml") {
+            Copy-Item "$env:CONFIG_DIR/GTK4.xml" "$env:USERPROFILE\natID.SDK\DevEnv\SetupCollectors\Packages\GTK4.xml" -Force
+            Copy-Item "$env:CONFIG_DIR/GTK4.xml" "$env:USERPROFILE\Setups\Packages\GTK4.xml" -Force
+          }
+          & "$env:USERPROFILE\natID.Utils\windows\SetupCollector.exe" "$env:USERPROFILE\Setups\$env:APP_NAME.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmd /c "dir /s /b R:\Setup"
+
+      - name: Stage and zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installer-output | Out-Null
+          Get-ChildItem "R:\Setup" -File -Recurse -Include *.msi, "Install*.exe" | Copy-Item -Destination installer-output
+          if (-not (Get-ChildItem installer-output -Filter *.msi)) {
+            Write-Error "No .msi produced - SetupCollector failed (check log above)"; exit 1
+          }
+          Compress-Archive -Path installer-output/* -DestinationPath "$env:APP_NAME-win.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-win
+          path: ${{ env.APP_NAME }}-win.zip
+          if-no-files-found: error
+
+# ---------------------------------------------------------------------------
+  macos-silicon:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install natID SDK
+        run: |
+          git clone --depth 1 https://github.com/idzafic/natID.git $HOME/natID
+          ln -s $HOME/natID/natID.SDK $HOME/natID.SDK
+          ln -s $HOME/natID/natID.Utils $HOME/natID.Utils
+          brew install sevenzip
+          curl -L -o /tmp/sdk-bin.7z \
+            https://github.com/idzafic/natID/releases/download/$SDK_TAG/bin_macOS_arm64_$SDK_DATE.7z
+          7zz x -y -o$HOME/natID.SDK/bin /tmp/sdk-bin.7z
+          ls $HOME/natID.SDK/bin/lib/
+
+      - name: Place project where the collector config expects it
+        run: |
+          mkdir -p "$HOME/$(dirname "$PROJECT_REL")"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/$PROJECT_REL"
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build $HOME/natID.RAMDisk/build -j
+          find $HOME/natID.RAMDisk/Out -maxdepth 4 -name "$APP_NAME*" -print
+
+      - name: Collect installer
+        run: |
+          sudo ln -s $HOME/natID.RAMDisk /Volumes/RAMDisk
+          cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
+          cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
+          chmod +x $HOME/natID.Utils/macOS/arm64/SetupCollector
+          $HOME/natID.Utils/macOS/arm64/SetupCollector $HOME/Setups/$APP_NAME.xml
+          find $HOME/natID.RAMDisk/Setup -maxdepth 4
+
+      - name: Stage and zip (ditto preserves exec permissions)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/installer-output"
+          cp -R $HOME/natID.RAMDisk/Setup/ALL_Bundles/* "$GITHUB_WORKSPACE/installer-output/" 2>/dev/null || \
+            cp -R $HOME/natID.RAMDisk/Setup/$APP_NAME/* "$GITHUB_WORKSPACE/installer-output/" 2>/dev/null || true
+          cd "$GITHUB_WORKSPACE/installer-output"
+          APP=$(find . -maxdepth 2 -name "*.app" | head -1)
+          test -n "$APP" || { echo "no .app produced"; ls -laR .; exit 1; }
+          ditto -c -k --keepParent --sequesterRsrc "$APP" "$APP_NAME-macOS-Silicon.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macOS-Silicon
+          path: installer-output/${{ env.APP_NAME }}-macOS-Silicon.zip
+          if-no-files-found: error
+
+# ---------------------------------------------------------------------------
+  macos-intel:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install natID SDK
+        run: |
+          git clone --depth 1 https://github.com/idzafic/natID.git $HOME/natID
+          ln -s $HOME/natID/natID.SDK $HOME/natID.SDK
+          ln -s $HOME/natID/natID.Utils $HOME/natID.Utils
+          brew install sevenzip
+          curl -L -o /tmp/sdk-bin.7z \
+            https://github.com/idzafic/natID/releases/download/$SDK_TAG/bin_macOS_x64_$SDK_DATE.7z
+          7zz x -y -o$HOME/natID.SDK/bin /tmp/sdk-bin.7z
+
+      - name: Place project where the collector config expects it
+        run: |
+          mkdir -p "$HOME/$(dirname "$PROJECT_REL")"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/$PROJECT_REL"
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build $HOME/natID.RAMDisk/build -j
+
+      - name: Collect installer
+        run: |
+          sudo ln -s $HOME/natID.RAMDisk /Volumes/RAMDisk
+          cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
+          cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
+          chmod +x $HOME/natID.Utils/macOS/x64/SetupCollector
+          $HOME/natID.Utils/macOS/x64/SetupCollector $HOME/Setups/$APP_NAME.xml
+          find $HOME/natID.RAMDisk/Setup -maxdepth 4
+
+      - name: Stage and zip
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/installer-output"
+          cp -R $HOME/natID.RAMDisk/Setup/ALL_Bundles/* "$GITHUB_WORKSPACE/installer-output/" 2>/dev/null || \
+            cp -R $HOME/natID.RAMDisk/Setup/$APP_NAME/* "$GITHUB_WORKSPACE/installer-output/" 2>/dev/null || true
+          cd "$GITHUB_WORKSPACE/installer-output"
+          APP=$(find . -maxdepth 2 -name "*.app" | head -1)
+          test -n "$APP" || { echo "no .app produced"; ls -laR .; exit 1; }
+          ditto -c -k --keepParent --sequesterRsrc "$APP" "$APP_NAME-macOS-Intel.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macOS-Intel
+          path: installer-output/${{ env.APP_NAME }}-macOS-Intel.zip
+          if-no-files-found: error
+
+# ---------------------------------------------------------------------------
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git p7zip-full patchelf \
+            libgtk-4-dev libadwaita-1-dev
+
+      - name: Install natID SDK
+        run: |
+          git clone --depth 1 https://github.com/idzafic/natID.git $HOME/natID
+          ln -s $HOME/natID/natID.SDK $HOME/natID.SDK
+          ln -s $HOME/natID/natID.Utils $HOME/natID.Utils
+          curl -L -o /tmp/sdk-bin.7z \
+            https://github.com/idzafic/natID/releases/download/$SDK_TAG/bin_linux_x64_$SDK_DATE.7z
+          7z x -y -o$HOME/natID.SDK/bin /tmp/sdk-bin.7z
+          ls $HOME/natID.SDK/bin/lib/
+
+      - name: Place project where the collector config expects it
+        run: |
+          mkdir -p "$HOME/$(dirname "$PROJECT_REL")"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/$PROJECT_REL"
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B $HOME/natID.RAMDisk/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build $HOME/natID.RAMDisk/build -j$(nproc)
+          test -x $HOME/natID.RAMDisk/Out/$SOLUTION/Release/$APP_NAME
+
+      - name: Collect installer
+        run: |
+          sudo rm -rf /media/RAMDisk
+          sudo ln -s $HOME/natID.RAMDisk /media/RAMDisk
+          cp -r $HOME/natID.SDK/DevEnv/SetupCollectors $HOME/Setups
+          cp "$GITHUB_WORKSPACE/$CONFIG_DIR/$APP_NAME.xml" $HOME/Setups/
+          chmod +x $HOME/natID.Utils/linux/SetupCollector
+          $HOME/natID.Utils/linux/SetupCollector $HOME/Setups/$APP_NAME.xml
+          find $HOME/natID.RAMDisk/Setup -maxdepth 4
+
+      - name: Stage and zip
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/installer-output"
+          find $HOME/natID.RAMDisk/Setup -name "*.deb" -exec cp {} "$GITHUB_WORKSPACE/installer-output/" \; || true
+          test -n "$(ls -A "$GITHUB_WORKSPACE/installer-output/")" || { echo "no .deb produced"; exit 1; }
+          cd "$GITHUB_WORKSPACE"
+          zip -j "$APP_NAME-linux.zip" installer-output/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-linux
+          path: ${{ env.APP_NAME }}-linux.zip
+          if-no-files-found: error
+
+# ---------------------------------------------------------------------------
+  release:
+    needs: [windows, macos-silicon, macos-intel, linux]
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'yes')
+    steps:
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "name=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - run: find artifacts -type f | head -50
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ env.APP_NAME }} ${{ steps.tag.outputs.name }}
+          body: |
+            ## Downloads
+
+            | Platform | File |
+            |----------|------|
+            | Windows | `${{ env.APP_NAME }}-win.zip` (installer .exe + .msi - keep both together) |
+            | macOS Apple Silicon | `${{ env.APP_NAME }}-macOS-Silicon.zip` |
+            | macOS Intel | `${{ env.APP_NAME }}-macOS-Intel.zip` |
+            | Linux (Ubuntu 24.04+) | `${{ env.APP_NAME }}-linux.zip` (contains .deb) |
+
+            ### Install notes
+            - **Windows**: unzip, run the .exe (or the .msi directly)
+            - **macOS**: unzip, drag to Applications, first launch: right-click -> Open
+            - **Linux**: unzip, `sudo apt install ./*.deb`
+          files: |
+            artifacts/${{ env.APP_NAME }}-win/*
+            artifacts/${{ env.APP_NAME }}-macOS-Silicon/*
+            artifacts/${{ env.APP_NAME }}-macOS-Intel/*
+            artifacts/${{ env.APP_NAME }}-linux/*
