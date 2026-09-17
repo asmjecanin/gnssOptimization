@@ -1,7 +1,5 @@
 //
 // ViewGNSS.h
-// Canvas-based visualization: sky plot (top-left) + convergence plot
-// (top-right) + cost-vs-iteration chart (bottom strip).
 //
 #pragma once
 #include <gui/Canvas.h>
@@ -12,8 +10,6 @@
 #include <td/MutableString.h>
 #include "GNSSModel.h"
 
-// Plain rectangle for panel geometry - deliberately not using gui::Rect
-// here since we only need left/top/right/bottom doubles for our own math.
 struct PanelBounds
 {
     double left = 0, top = 0, right = 0, bottom = 0;
@@ -52,9 +48,7 @@ protected:
     // convergence plot shows +/- this many meters around the fixed reference point
     double _plotHalfRangeM = 120000.0;
 
-    // Chart strip height scales with window height instead of being a
-    // fixed pixel count, so it stays proportionate on both a small
-    // laptop window and a maximized/fullscreen one.
+    
     double chartHeight() const
     {
         double h = _size.height * 0.16;
@@ -72,9 +66,7 @@ protected:
         _isPlaying = true;
         _stepTimer.start();
 
-        // DOP reflects geometry+weighting at the (best available) solution -
-        // evaluate it at Gauss-Newton's final state regardless of which
-        // algorithm is currently displayed.
+        
         _dopValid = _model.computeDOP(_historyGN.back().state, _pdop, _gdop);
     }
 
@@ -130,8 +122,6 @@ protected:
         return gui::Rect(gui::Point(b.left, b.top), gui::Size(b.width(), b.height()));
     }
 
-    // azimuth/elevation -> screen point. Zenith (90 deg) at the panel
-    // center, horizon (the elevation mask) at the panel edge.
     gui::Point skyPlotPoint(double azimuthRad, double elevationRad, const PanelBounds& b) const
     {
         double elevDeg = elevationRad * 180.0 / kPi;
@@ -140,10 +130,7 @@ protected:
                            b.centerY() - radius * std::cos(azimuthRad));
     }
 
-    // world X/Y (meters) -> screen point, centered on the FIXED reference
-    // point (kBaseX/kBaseY), not the live true position - if this were
-    // centered on the true position, the target marker would always land
-    // exactly at panel-center by definition and could never appear to move.
+   
     gui::Point convergencePoint(double worldX, double worldY, const PanelBounds& b) const
     {
         double scale = (std::min(b.width(), b.height()) * 0.40) / _plotHalfRangeM;
@@ -152,10 +139,7 @@ protected:
         return gui::Point(b.centerX() + offsetX * scale, b.centerY() - offsetY * scale);
     }
 
-    // small filled+ring "icon" - used for every marker so they all read
-    // as deliberate icons rather than plain dots. fillRadius <= 0 means
-    // ring-only (used for the initial-guess marker, to distinguish it
-    // from the solid, filled "current estimate" marker).
+  
     void drawMarker(const gui::Point& p, double ringRadius, double fillRadius, td::ColorID color) const
     {
         gui::Circle ring(p, ringRadius);
@@ -197,11 +181,7 @@ protected:
         }
     }
 
-    // Cost-vs-iteration chart, all three algorithms overlaid. X axis is
-    // iteration PROGRESS FRACTION (i / (N-1)) rather than raw iteration
-    // count - GN/Newton converge in a handful of steps and GD in
-    // hundreds, so a shared raw iteration axis would squash the fast
-    // methods into an invisible sliver. Y axis is log10(cost).
+    // Cost-vs-iteration chart, all three algorithms overlaid. 
     void drawCostChart(const PanelBounds& b) const
     {
         double minLog = 1e18, maxLog = -1e18;
@@ -384,7 +364,6 @@ protected:
     }
 
 public:
-    // Fixed reference point that target/guess offset sliders measure from.
     static constexpr double kBaseX = 4.0e6, kBaseY = 3.0e6, kBaseZ = 3.5e6, kBaseB = 5.0;
 
     ViewGNSS()
@@ -464,8 +443,6 @@ public:
         _stepTimer.start();
     }
 
-    // Playback controls - do NOT re-solve anything, just control whether
-    // and where the already-computed history is being stepped through.
     void play()
     {
         _isPlaying = true;
@@ -489,9 +466,7 @@ public:
         newScenario(_model.satelliteCount() > 0 ? _model.satelliteCount() : 8);
     }
 
-    // Runs nTrials independent noisy realizations of the SAME scenario
-    // and reports mean +/- std of final position error for all three
-    // algorithms.
+  
     void runBatchExperiment(int nTrials)
     {
         int nSat = _model.satelliteCount() > 0 ? _model.satelliteCount() : 8;
