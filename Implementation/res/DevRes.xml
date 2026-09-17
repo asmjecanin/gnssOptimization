@@ -17,4 +17,16 @@
         minorVersion="0"
         versionDate="2026-09-16"
         comment="GNSS receiver positioning via weighted nonlinear least squares - Gauss-Newton vs Gradient Descent vs Newton">
+	<Langs>
+		<Lang id="EN" name="English"/>
+		<Lang id="BA" name="Bosanski (Bosnian)"/>
+	</Langs>
+	<ArtWork>
+		<Config path="Common/ResConfigs/natGUI.xml"/>
+		<Config path=":main.xml"/>
+	</ArtWork>
+	<Translation>
+		<Config path="Common/ResConfigs/tr/%s/natGUI.xml"/>
+		<Config path=":tr/main_%s.xml"/>
+	</Translation>
 </DevRes>
