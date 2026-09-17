@@ -143,6 +143,43 @@ jobs:
           $HOME/natID.Utils/macOS/arm64/SetupCollector $HOME/Setups/$APP_NAME.xml
           find $HOME/natID.RAMDisk/Setup -maxdepth 4
 
+      - name: Fix Info.plist placeholders + ad-hoc codesign
+        run: |
+          APP_BUNDLE=$(find $HOME/natID.RAMDisk/Setup -maxdepth 3 -name "*.app" | head -1)
+          test -n "$APP_BUNDLE" || { echo "no .app bundle found under Setup - collector step did not produce one"; exit 1; }
+          echo "patching: $APP_BUNDLE"
+          PLIST="$APP_BUNDLE/Contents/Info.plist"
+          test -f "$PLIST" || { echo "no Info.plist inside $APP_BUNDLE"; exit 1; }
+
+          # The SDK's stock template ships Xcode-only $(VAR) placeholders that a
+          # plain `cmake --build` never fills in - set every one to a real value.
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.asmjecanin.$APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDevelopmentRegion en" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 12.0" "$PLIST"
+
+          # Template had CFBundleIconFile listed twice (stray empty one from the
+          # stock template + the real one appended later) - collapse to one.
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string macApp.icns" "$PLIST"
+
+          echo "--- validating plist structure ---"
+          plutil -lint "$PLIST"
+
+          echo "--- values after patch (read this in the log, no Mac needed) ---"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundlePackageType" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$PLIST"
+
+          echo "--- ad-hoc codesigning ---"
+          codesign --force --deep --sign - "$APP_BUNDLE"
+          codesign --verify --deep --strict "$APP_BUNDLE"
+          echo "codesign OK"
+
       - name: Stage and zip (ditto preserves exec permissions)
         run: |
           mkdir -p "$GITHUB_WORKSPACE/installer-output"
@@ -194,6 +231,39 @@ jobs:
           chmod +x $HOME/natID.Utils/macOS/x64/SetupCollector
           $HOME/natID.Utils/macOS/x64/SetupCollector $HOME/Setups/$APP_NAME.xml
           find $HOME/natID.RAMDisk/Setup -maxdepth 4
+
+      - name: Fix Info.plist placeholders + ad-hoc codesign
+        run: |
+          APP_BUNDLE=$(find $HOME/natID.RAMDisk/Setup -maxdepth 3 -name "*.app" | head -1)
+          test -n "$APP_BUNDLE" || { echo "no .app bundle found under Setup - collector step did not produce one"; exit 1; }
+          echo "patching: $APP_BUNDLE"
+          PLIST="$APP_BUNDLE/Contents/Info.plist"
+          test -f "$PLIST" || { echo "no Info.plist inside $APP_BUNDLE"; exit 1; }
+
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.asmjecanin.$APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDevelopmentRegion en" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 12.0" "$PLIST"
+
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string macApp.icns" "$PLIST"
+
+          echo "--- validating plist structure ---"
+          plutil -lint "$PLIST"
+
+          echo "--- values after patch (read this in the log, no Mac needed) ---"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundlePackageType" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$PLIST"
+
+          echo "--- ad-hoc codesigning ---"
+          codesign --force --deep --sign - "$APP_BUNDLE"
+          codesign --verify --deep --strict "$APP_BUNDLE"
+          echo "codesign OK"
 
       - name: Stage and zip
         run: |
