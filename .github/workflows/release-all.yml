@@ -180,6 +180,22 @@ jobs:
           codesign --verify --deep --strict "$APP_BUNDLE"
           echo "codesign OK"
 
+      - name: Smoke-test launch on this runner
+        run: |
+          APP_BUNDLE=$(find $HOME/natID.RAMDisk/Setup -maxdepth 3 -name "*.app" | head -1)
+          echo "launching: $APP_BUNDLE"
+          open "$APP_BUNDLE"
+          sleep 6
+          if pgrep -f "$APP_NAME" > /dev/null; then
+            echo "PASS: process is running after 6s"
+          else
+            echo "FAIL: process is not running - likely crashed on launch"
+            echo "--- checking for crash reports ---"
+            find ~/Library/Logs/DiagnosticReports -iname "*${APP_NAME}*" -newer "$APP_BUNDLE" -exec cat {} \; 2>/dev/null || echo "(no crash report found)"
+            exit 1
+          fi
+          pkill -f "$APP_NAME" || true
+
       - name: Stage and zip (ditto preserves exec permissions)
         run: |
           mkdir -p "$GITHUB_WORKSPACE/installer-output"
@@ -264,6 +280,22 @@ jobs:
           codesign --force --deep --sign - "$APP_BUNDLE"
           codesign --verify --deep --strict "$APP_BUNDLE"
           echo "codesign OK"
+
+      - name: Smoke-test launch on this runner
+        run: |
+          APP_BUNDLE=$(find $HOME/natID.RAMDisk/Setup -maxdepth 3 -name "*.app" | head -1)
+          echo "launching: $APP_BUNDLE"
+          open "$APP_BUNDLE"
+          sleep 6
+          if pgrep -f "$APP_NAME" > /dev/null; then
+            echo "PASS: process is running after 6s"
+          else
+            echo "FAIL: process is not running - likely crashed on launch"
+            echo "--- checking for crash reports ---"
+            find ~/Library/Logs/DiagnosticReports -iname "*${APP_NAME}*" -newer "$APP_BUNDLE" -exec cat {} \; 2>/dev/null || echo "(no crash report found)"
+            exit 1
+          fi
+          pkill -f "$APP_NAME" || true
 
       - name: Stage and zip
         run: |
