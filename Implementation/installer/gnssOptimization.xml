@@ -32,7 +32,7 @@
 		<!-- GTK runtime is bundled into the Windows installer only -
 		     Linux/macOS declare it as a real package dependency instead (see
 		     lin:depends below) rather than bundling a duplicate copy. -->
-		<Package name="GTK4" exclude="linux"/>
+		<Package name="GTK4" exclude="macOS,linux"/>
 	</Packages>
 
 	<ResData>

@@ -116,7 +116,7 @@ jobs:
           git clone --depth 1 https://github.com/idzafic/natID.git $HOME/natID
           ln -s $HOME/natID/natID.SDK $HOME/natID.SDK
           ln -s $HOME/natID/natID.Utils $HOME/natID.Utils
-          brew install sevenzip gtk libadwaita
+          brew install sevenzip 
           curl -L -o /tmp/sdk-bin.7z \
             https://github.com/idzafic/natID/releases/download/$SDK_TAG/bin_macOS_arm64_$SDK_DATE.7z
           7zz x -y -o$HOME/natID.SDK/bin /tmp/sdk-bin.7z
@@ -170,7 +170,7 @@ jobs:
           git clone --depth 1 https://github.com/idzafic/natID.git $HOME/natID
           ln -s $HOME/natID/natID.SDK $HOME/natID.SDK
           ln -s $HOME/natID/natID.Utils $HOME/natID.Utils
-          brew install sevenzip gtk4 libadwaita
+          brew install sevenzip
           curl -L -o /tmp/sdk-bin.7z \
             https://github.com/idzafic/natID/releases/download/$SDK_TAG/bin_macOS_x64_$SDK_DATE.7z
           7zz x -y -o$HOME/natID.SDK/bin /tmp/sdk-bin.7z
