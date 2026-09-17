@@ -1,37 +1,4 @@
 <?xml version='1.0'?>
-<!--
-	Product metadata for SetupCollector. displayName/maintainer/etc. end up
-	in the Windows MSI property table and the Debian control file, so keep
-	maintainer/comment plain ASCII.
-
-	EDIT: email and homePage below are placeholders - fill in your real
-	GitHub repo URL and contact email before building an installer.
--->
-<DevRes version="2024.07.16"
-        regionals="Common/Regionals"
-        displayName="GNSS Positioning"
-        maintainer="Asja Smjecanin"
-        email="asmjecanin1@etf.unsa.ba"
-        homePage="https://github.com/asmjecanin/gnssOptimization"
-        majorVersion="1"
-        minorVersion="0"
-        versionDate="2026-09-16"
-        comment="GNSS receiver positioning via weighted nonlinear least squares - Gauss-Newton vs Gradient Descent vs Newton">
-	<Langs>
-		<Lang id="EN" name="English"/>
-		<Lang id="BA" name="Bosanski (Bosnian)"/>
-	</Langs>
-	<ArtWork>
-		<Config path="Common/ResConfigs/natGUI.xml"/>
-		<Config path=":main.xml"/>
-	</ArtWork>
-	<Translation>
-		<Config path="Common/ResConfigs/tr/%s/natGUI.xml"/>
-		<Config path=":tr/main_%s.xml"/>
-	</Translation>
-</DevRes>
-
-<?xml version='1.0'?>
 <DevRes regionals="Common/Regionals"
 		displayName="GNSS Positioning"
 		maintainer="Asja Smjecanin" 
