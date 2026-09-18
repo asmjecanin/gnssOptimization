@@ -1,0 +1,265 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+
+\geometry{margin=2.5cm}
+
+\definecolor{codebg}{rgb}{0.95,0.95,0.95}
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    showstringspaces=false,
+    language=C++
+}
+
+\title{Optimization-Based GNSS Receiver Positioning Using Weighted Least Squares \\ \large Project Documentation}
+\author{Asja Smjecanin \\ Faculty of Electrical Engineering (ETF), Sarajevo \\ Index: 20012}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The goal of this project is to implement and compare a few numerical optimization methods that are used for solving the classical GNSS (Global Navigation Satellite System) receiver positioning problem. The project problem is: given a set of satellites with known positions and measured pseudoranges (noisy distances) to the receiver, we want to estimate the receiver's unknown position and clock bias.
+
+This is a nonlinear least squares problem, because the distance from receiver to satellite is a nonlinear function of the receiver's coordinates. In this project we implemented three iterative methods for solving it:
+
+\begin{itemize}
+    \item \textbf{Gauss-Newton (GN)} - approximates the Hessian using only first-order (Jacobian) information.
+    \item \textbf{Gradient Descent (GD)} - uses only the gradient direction, with a simple backtracking line search.
+    \item \textbf{Full Newton} - uses the exact Hessian, including second-order (curvature) terms.
+\end{itemize}
+
+The project also uses a weighted least squares formulation, where each satellite's residual is weighted depending on how reliable its measurement is assumed to be. We compare what happens when the assumed weighting strategy matches the real (physical) noise model, and what happens when it does not.
+
+For the linear algebra (solving the normal equations at each iteration) we used the sparse solver from the \texttt{natID} framework given by the professor, and for the whole GUI/visualization part we also used \texttt{natID}'s GUI module (\texttt{gui::}).
+
+The application shows, in real time, a sky-plot of the satellites, a convergence plot of how the estimated position moves towards the true position, and a cost-vs-iteration chart, for all three algorithms.
+
+\section{Problem Formulation}
+
+\subsection{State vector}
+
+The receiver state is a 4-dimensional vector: 3D position plus clock bias $b$ (in meters, since clock bias is converted to a distance by multiplying with the speed of light):
+
+\[
+\mathbf{x} = \begin{bmatrix} X & Y & Z & b \end{bmatrix}^T
+\]
+
+\subsection{Measurement model}
+
+For satellite $i$ with known position $(X_i, Y_i, Z_i)$, the predicted pseudorange is:
+
+\[
+\hat{\rho}_i(\mathbf{x}) = \sqrt{(X - X_i)^2 + (Y - Y_i)^2 + (Z - Z_i)^2} + b
+\]
+
+The residual for satellite $i$ is the difference between the measured pseudorange $\rho_i$ and the predicted one:
+
+\[
+r_i(\mathbf{x}) = \rho_i - \hat{\rho}_i(\mathbf{x})
+\]
+
+\subsection{Weighted cost function}
+
+We minimize a weighted sum of squared residuals:
+
+\[
+F(\mathbf{x}) = \frac{1}{2}\sum_{i=1}^{n} w_i \, r_i(\mathbf{x})^2
+\]
+
+where $w_i$ is the weight assigned to satellite $i$. This is exactly what the \texttt{costAt()} function computes in code.
+
+\subsection{Jacobian}
+
+The Jacobian matrix is computed using each satellite as one row. For satellite $i$ (with respect to $X, Y, Z, b$), the row of the Jacobian is computed as its geometric unit vector, plus $1$ for the clock bias term:
+
+\[
+J_i = \begin{bmatrix} \dfrac{X - X_i}{d_i} & \dfrac{Y - Y_i}{d_i} & \dfrac{Z - Z_i}{d_i} & 1 \end{bmatrix}
+\]
+
+where $d_i$ is the current predicted geometric distance to satellite $i$.
+
+\subsection{Normal equations (Gauss-Newton)}
+
+For Gauss-Newton, we build the weighted normal equations:
+
+\[
+G = J^T W J, \qquad \text{rhs} = J^T W r
+\]
+
+and solve $G \, \Delta\mathbf{x} = \text{rhs}$ for the update step $\Delta\mathbf{x}$. This is exactly what \texttt{buildNormalEquations()} builds, one satellite at a time (accumulating into a $4\times4$ matrix), and it is solved with \texttt{natID}'s sparse solver, not with a manually written linear solver.
+
+\subsection{Full Newton correction}
+
+The full Newton method adds the second-order curvature term to the Gauss-Newton approximation. For each satellite, the extra Hessian contribution is:
+
+\[
+H_i = -w_i r_i \cdot \frac{I - J_{1:3,i} J_{1:3,i}^T}{d_i}
+\]
+
+which is added on top of $G$. This term becomes negligible when the residuals $r_i$ are small compared to the distance $d_i$ - and since GPS slant ranges are around $2 \times 10^7$ m, this term almost never matters in practice. That is why, in our tests, full Newton behaved really similarly to Gauss-Newton, but we still wanted to show it.
+
+\subsection{Gradient descent with backtracking}
+
+Gradient descent takes a step in the direction of $\text{rhs} = J^T W r$ (which is the negative gradient direction of $F$), with step size $\alpha$ chosen by simple backtracking: start from some $\alpha$, and halve it until the cost actually decreases (using the bisection method from the course materials).
+
+\subsection{Weighting strategies}
+
+Three weighting strategies were implemented:
+
+\begin{itemize}
+    \item \textbf{Uniform}: $w_i = 1$ for all satellites.
+    \item \textbf{TrueElevation}: $w_i = 1/\sigma_{\text{true},i}^2$, which matches the physically simulated noise model exactly.
+    \item \textbf{ElevationSquared}: assumes noise grows like $\sigma_0/\sin^2(\text{elevation})$ instead of the true $\sigma_0/\sin(\text{elevation})$ - this is deliberately a \emph{wrong} model, used to show what happens when the assumed weighting does not match reality.
+\end{itemize}
+
+\subsection{Dilution of Precision (DOP)}
+
+To quantify how good the satellite geometry is (independent of the noise itself), we compute PDOP (position) and GDOP (geometry, including clock bias) from the diagonal of the inverse of $G$:
+
+\[
+\text{PDOP} = \sqrt{Q_{XX} + Q_{YY} + Q_{ZZ}}, \qquad
+\text{GDOP} = \sqrt{Q_{XX} + Q_{YY} + Q_{ZZ} + Q_{bb}}
+\]
+
+where $Q = G^{-1}$. In code, this inverse is computed by hand with Gauss-Jordan elimination on an augmented $4\times8$ matrix (function \texttt{computeDOP()}), because we only need the diagonal of a small $4\times4$ inverse, so calling the full sparse solver again for this one thing was not necessary.
+
+\section{Project Architecture}
+
+The project is a small desktop GUI application, built on top of the professor's \texttt{natID} framework (both the \texttt{sparse::} module for linear algebra and the \texttt{gui::} module for the interface). The source is split as follows:
+
+\begin{itemize}
+    \item \texttt{GNSSModel.h} - the actual math: satellite simulation, cost function, the three solvers, DOP.
+    \item \texttt{ViewGNSS.h} - a custom \texttt{gui::Canvas} that draws the sky-plot, convergence plot, and cost chart, and also drives the step-by-step animation.
+    \item \texttt{MainView.h} - the control panel (sliders, combo boxes) that lets the user change parameters.
+    \item \texttt{MainWindow.h}, \texttt{MenuBar.h}, \texttt{Application.h}, \texttt{main.cpp} -  where we actually start a \texttt{natID} GUI app.
+\end{itemize}
+
+\section{GNSSModel.h}
+
+In this script is the optimization logic. The class \texttt{GNSSModel} keeps a vector of \texttt{Satellite} structs (each one has position, true noise sigma, assumed weight, pseudorange, and azimuth/elevation for drawing), plus the true receiver position \texttt{\_truePos}.
+
+\subsection{generateConstellation()}
+
+Randomly places \texttt{nSat} satellites around the true receiver position, using random azimuth and elevation (elevation is restricted above the elevation mask, by default $15^\circ$, because the satellites which are too low on the horizon are normally not used in real GNSS receivers). For each satellite, the "true" noise sigma is computed from elevation ($\sigma_{\text{true}} = \sigma_0/\sin(\text{el})$ - lower elevation means noisier measurement. That actually matches physical reality since the signal passes through more atmosphere), then a noisy pseudorange is generated using a normal distribution with that sigma. This is the ground truth noise, independent from whatever weighting strategy the solver assumes.
+
+\subsection{buildNormalEquations() and gaussNewtonStep()}
+
+\texttt{buildNormalEquations()} loops over all satellites and accumulates $G$ and $\text{rhs}$ as described in Section 2.5. Then \texttt{gaussNewtonStep()} takes this $4\times4$ system and solves it with the \texttt{natID} sparse solver:
+
+\begin{lstlisting}
+sparse::DblSolverReleaser p_solver(
+    sparse::createDblSolver(4, 10, sparse::Symmetry::SymmetricPosDef,
+                             sparse::SolverType::LDLT)
+);
+sparse::DblSolver& solver = *(p_solver.ptr());
+for (int a = 0; a < 4; ++a)
+    for (int b = a; b < 4; ++b)
+        solver.addTriple(a, b, G[a][b]);
+for (int a = 0; a < 4; ++a)
+    solver.setRHS(a, rhs[a]);
+if (!solver.factorize()) return GNSSState{};
+solver.solve();
+\end{lstlisting}
+ We use LDLT factorization, since $G$ is symmetric positive definite by construction (it's a sum of $J^T W J$ terms). We build $G$ and rhs manually with our own loops instead of using \texttt{natID}'s built-in \texttt{IMatrix::calcGainAndRHS}, because that call was crashing on our setup - so we only rely on \texttt{natID} for the actual factorization/solve step, not for assembling the system.
+
+\subsection{gradientDescentStep()}
+
+Reuses \texttt{buildNormalEquations()} just to get the gradient (rhs), ignores $G$, then does the backtracking line search described in Section 2.6, halving $\alpha$ up to \texttt{maxBacktrack} times until the cost decreases.
+
+\subsection{buildNewtonSystem() and newtonStep()}
+
+Same idea as Gauss-Newton, but adds the curvature correction from Section 2.5 into the Hessian matrix. Since the resulting matrix is not guaranteed positive-definite anymore (it's only symmetric), the solver is created with \texttt{Symmetry::SymmetricIndef} instead of \texttt{SymmetricPosDef}. If factorization fails (e.g.\ indefinite/singular system), it falls back to a plain Gauss-Newton step - this is the \texttt{usedFallback} flag.
+
+\subsection{runGaussNewton() / runGradientDescent() / runNewton()}
+
+These are just the iteration loops: repeat the corresponding step function until the step norm is smaller than a tolerance (or, for GD, until the cost stops improving), and record the full history of states and costs at each iteration. This history is later used both for the animation and for the cost-vs-iteration chart.
+
+\subsection{computeDOP()}
+
+Builds an augmented $4\times8$ matrix $[G \mid I]$ and reduces it to $[I \mid G^{-1}]$ using Gauss-Jordan elimination with partial pivoting, then reads PDOP/GDOP off the diagonal as in Section 2.7. Returns \texttt{false} if the pivot becomes numerically singular (this happens with too few satellites, e.g.\ bad geometry with only 4 satellites almost collinear).
+
+\section{ViewGNSS.h - Visualization}
+
+This class inherits from \texttt{gui::Canvas} (part of \texttt{natID}'s GUI module) and is responsible for both running the model and drawing everything. 
+
+\subsection{Layout}
+
+The canvas is split into three panels using a small helper struct \texttt{PanelBounds}: sky-plot (left), convergence plot (right), and cost chart (bottom strip). The panel boundaries are recomputed every frame from the current canvas size (\texttt{skyPlotBounds()}, \texttt{convergenceBounds()}, \texttt{chartBounds()}), so the layout is fully responsive to window resizing.
+
+\subsection{rerun()}
+
+Whenever any parameter changes (satellite count, noise level, weighting, target/guess position), \texttt{rerun()} is called: it re-runs all three algorithms from scratch (\texttt{runGaussNewton}, \texttt{runGradientDescent}, \texttt{runNewton}), resets the animation to step 0, and recomputes DOP for the final Gauss-Newton state.
+
+\subsection{Sky-plot drawing (skyPlotPoint())}
+
+Draws each satellite as an orange marker, positioned by azimuth/elevation using a standard polar-to-cartesian sky-plot projection: elevation controls the radius (zenith = center, horizon = edge), azimuth controls the angle:
+
+\[
+r = \frac{90^\circ - \text{el}}{90^\circ} \cdot r_{\max}, \qquad
+x = x_c + r\sin(\text{az}), \qquad y = y_c - r\cos(\text{az})
+\]
+
+\subsection{Convergence plot (convergencePoint())}
+
+Shows the true position (teal marker), the initial guess (red marker), and a trail of the estimate as it converges, in the active algorithm's color (teal for GN, orange for GD, green for Newton). 
+
+\subsection{drawCostChart()}
+
+Plots $\log_{10}(\text{cost})$ vs.\ iteration number, for all three algorithms overlaid, with the active one drawn thicker. Log scale is needed because the cost typically drops by several orders of magnitude within a few iterations, so a linear scale would make the later iterations invisible.
+
+\subsection{Step animation}
+
+\texttt{\_currentStep} advances automatically over time (paced by \texttt{\_stepTimer}), through play/pause/restart controls (\texttt{play()}, \texttt{pause()}, \texttt{restartPlayback()}), letting the user watch the estimate move step by step toward the true position rather than just seeing the final result.
+
+\subsection{runBatchExperiment()}
+
+Runs \texttt{nTrials} independent noisy realizations of the same scenario (same satellite geometry, new random noise each time), records the final position error of all three algorithms, and reports mean $\pm$ standard deviation for each. This gives a statistical comparison instead of relying on a single lucky/unlucky run.
+
+\section{GUI Wiring (MainView, MainWindow, MenuBar, Application)}
+
+\subsection{MainView.h}
+
+Builds the control panel using \texttt{natID}'s \texttt{gui::GridLayout} + \texttt{gui::GridComposer}: combo boxes for algorithm choice, weighting strategy, and playback; sliders for satellite count, noise level, target position offset, and initial guess offset. Each control has an \texttt{onChangedValue}/\texttt{onChangedSelection} callback that forwards the new value into \texttt{ViewGNSS}. 
+
+\subsection{MainWindow.h}
+
+Sets up the window, attaches the menu bar and main view, and handles the two menu actions ("Reset" and "Run 50 Trials") by forwarding them to the corresponding \texttt{ViewGNSS} method.
+
+\subsection{MenuBar.h / Application.h / main.cpp}
+
+Standard \texttt{natID} application entry point: \texttt{Application::createInitialWindow()} creates the \texttt{MainWindow}, and \texttt{main.cpp} just constructs the \texttt{Application} and calls \texttt{run()}.
+
+\section{Summary of natID Usage}
+
+To be clear about where exactly \texttt{natID} was required and used:
+
+\begin{itemize}
+    \item \textbf{Sparse solver} (\texttt{sparse::DblSolver}, LDLT factorization) - used in \texttt{gaussNewtonStep()} and \texttt{newtonStep()} to solve the $4\times4$ normal equations at every iteration.
+    \item \textbf{GUI framework} (\texttt{gui::Canvas}, \texttt{gui::Window}, \texttt{gui::MenuBar}, \texttt{gui::Slider}, \texttt{gui::ComboBox}, \texttt{gui::GridLayout}, \texttt{gui::Shape}, \texttt{gui::DrawableString}) - used for the entire application window, controls, and custom drawing.
+\end{itemize}
+
+Everything else (the actual cost function, Jacobians, weighting logic, DOP computation) was implemented manually.
+
+\section{Conclusion}
+
+The application successfully compares Gauss-Newton, gradient descent, and full Newton on the weighted GNSS positioning problem, both visually (through the animated convergence plot) and statistically (through the batch experiment). As expected from the theory, Gauss-Newton converges much faster than gradient descent for this type of well-conditioned least squares problem, and full Newton adds essentially nothing over Gauss-Newton, because the second-order curvature term is negligible at GPS slant-range scales. The mismatched weighting strategy (\texttt{ElevationSquared}) generally results in worse final accuracy compared to the strategy that matches the true noise model (\texttt{TrueElevation}), which illustrates why weighting choice matters in practice, not just the choice of optimization algorithm.
+
+\end{document}
