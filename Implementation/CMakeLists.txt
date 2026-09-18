@@ -27,3 +27,30 @@ include(${NATID_SDK_ROOT}/DevEnv/MatrixLib.cmake)
 # into this project's root, unchanged, before building.
 
 include(gnssOptimization.cmake)
+
+# macOS bundle metadata.
+#
+# The Makefiles and Ninja generators copy the Info.plist template verbatim,
+# leaving Xcode's $(...) variables unexpanded, so Finder refuses to launch the
+# bundle with "the application cannot be opened because its executable is
+# missing". They also leave the bundle unsigned, which arm64 will not run.
+#
+# The Xcode generator is excluded on purpose: it expands the variables and
+# signs the bundle itself, it uses a different plist template that lacks some
+# of these keys, and a PlistBuddy "Set" on a missing key fails - which Xcode
+# treats as a fatal build error. Adding this block without the generator check
+# makes the build fail under Xcode.
+if(APPLE AND NOT CMAKE_GENERATOR STREQUAL "Xcode" AND TARGET ${GNSS_APP_NAME})
+    set(PLIST_TOOL /usr/libexec/PlistBuddy)
+    set(BUNDLE_PLIST $<TARGET_BUNDLE_DIR:${GNSS_APP_NAME}>/Contents/Info.plist)
+    add_custom_command(TARGET ${GNSS_APP_NAME} POST_BUILD
+        COMMAND ${PLIST_TOOL} -c "Set :CFBundleExecutable ${GNSS_APP_NAME}" ${BUNDLE_PLIST}
+        COMMAND ${PLIST_TOOL} -c "Set :CFBundleName ${GNSS_APP_NAME}" ${BUNDLE_PLIST}
+        COMMAND ${PLIST_TOOL} -c "Set :CFBundleIdentifier com.example.gnssoptimization" ${BUNDLE_PLIST}
+        COMMAND ${PLIST_TOOL} -c "Set :CFBundlePackageType APPL" ${BUNDLE_PLIST}
+        COMMAND ${PLIST_TOOL} -c "Set :CFBundleDevelopmentRegion en" ${BUNDLE_PLIST}
+        COMMAND ${PLIST_TOOL} -c "Set :LSMinimumSystemVersion 12.3" ${BUNDLE_PLIST}
+        COMMAND codesign --force --deep -s - $<TARGET_BUNDLE_DIR:${GNSS_APP_NAME}>
+        COMMENT "Fixing Info.plist and signing the app bundle"
+    )
+endif()
